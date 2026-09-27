@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Apprenticeship Logbook</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="app">
+
+  <!-- LEFT RAIL -->
+  <aside class="rail">
+    <div class="rail-brand">
+      <span class="rail-brand-mark">⌁</span>
+      <div>
+        <h1>Apprentice<br>Logbook</h1>
+        <p class="rail-brand-sub" id="traineeNameDisplay">Plumbing &amp; Domestic Heating</p>
+      </div>
+    </div>
+
+    <button class="btn btn-primary btn-block" id="openNewEntryBtn">+ New log entry</button>
+
+    <div class="rail-section">
+      <h2>Progress</h2>
+      <div class="stat-row">
+        <span class="stat-num" id="statTotalEntries">0</span>
+        <span class="stat-label">entries logged</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-num" id="statTotalHours">0</span>
+        <span class="stat-label">hours recorded</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-num" id="statIndependent">0</span>
+        <span class="stat-label">tasks done independently</span>
+      </div>
+    </div>
+
+    <div class="rail-section">
+      <h2>Filter log</h2>
+      <label class="field-label" for="filterCategory">Category</label>
+      <select id="filterCategory" class="input">
+        <option value="">All categories</option>
+      </select>
+      <label class="field-label" for="filterFrom">From</label>
+      <input type="date" id="filterFrom" class="input">
+      <label class="field-label" for="filterTo">To</label>
+      <input type="date" id="filterTo" class="input">
+      <button class="btn btn-ghost btn-block" id="clearFiltersBtn">Clear filters</button>
+    </div>
+
+    <div class="rail-section">
+      <h2>Logbook export</h2>
+      <p class="rail-hint">Builds a printable logbook from the entries currently shown, for interviews or appraisals.</p>
+      <button class="btn btn-outline btn-block" id="generateLogbookBtn">Generate logbook</button>
+    </div>
+
+    <div class="rail-section">
+      <h2>Backup</h2>
+      <p class="rail-hint">Entries and photos live in this browser only. Export regularly and commit the file to your GitHub repo to keep them safe.</p>
+      <button class="btn btn-ghost btn-block" id="exportBackupBtn">Export backup (.json)</button>
+      <label class="btn btn-ghost btn-block file-btn">
+        Import backup
+        <input type="file" id="importBackupInput" accept="application/json" hidden>
+      </label>
+      <button class="btn btn-ghost btn-block" id="settingsBtn">Trainee details</button>
+    </div>
+  </aside>
+
+  <!-- MAIN LEDGER -->
+  <main class="ledger">
+    <header class="ledger-header">
+      <h2>Log</h2>
+      <span class="ledger-count" id="ledgerCount">0 entries</span>
+    </header>
+
+    <div class="empty-state" id="emptyState">
+      <p>No entries yet.</p>
+      <p class="empty-state-sub">Log your first task — pick a quick-select category, add notes, and attach a photo if you have one.</p>
+      <button class="btn btn-primary" id="emptyStateNewBtn">+ New log entry</button>
+    </div>
+
+    <div id="entryList" class="entry-list"></div>
+  </main>
+</div>
+
+<!-- NEW / EDIT ENTRY MODAL -->
+<div class="modal-backdrop" id="entryModalBackdrop">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-head">
+      <h3 id="entryModalTitle">New log entry</h3>
+      <button class="icon-btn" id="closeEntryModalBtn" aria-label="Close">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <input type="hidden" id="entryId">
+
+      <label class="field-label" for="entryDate">Date</label>
+      <input type="date" id="entryDate" class="input">
+
+      <label class="field-label">Quick-select task</label>
+      <div class="chip-grid" id="categoryChips"></div>
+
+      <label class="field-label" for="entryCategoryOther">Category (edit or type your own)</label>
+      <input type="text" id="entryCategoryOther" class="input" placeholder="e.g. Copper pipework — capillary jointing">
+
+      <label class="field-label">Level of involvement</label>
+      <div class="chip-row" id="involvementChips">
+        <button type="button" class="chip" data-involvement="Observed">Observed</button>
+        <button type="button" class="chip" data-involvement="Assisted">Assisted</button>
+        <button type="button" class="chip" data-involvement="Completed independently">Completed independently</button>
+      </div>
+
+      <label class="field-label" for="entryHours">Hours spent</label>
+      <input type="number" id="entryHours" class="input" min="0" step="0.25" placeholder="e.g. 2.5">
+
+      <label class="field-label" for="entryPreNotes">Pre-job customer notes</label>
+      <textarea id="entryPreNotes" class="input" rows="3" placeholder="What the customer told you, symptoms reported, access notes, anything agreed before starting"></textarea>
+
+      <label class="field-label" for="entryPostNotes">Post-job reflective notes</label>
+      <textarea id="entryPostNotes" class="input" rows="4" placeholder="What the job actually involved, any problems, fixes, or what you'd do differently next time"></textarea>
+
+      <label class="field-label" for="entryWitness">Assessed / witnessed by (optional)</label>
+      <input type="text" id="entryWitness" class="input" placeholder="Supervisor or assessor name">
+
+      <label class="field-label">Tools used</label>
+      <div class="chip-grid" id="toolChips"></div>
+      <div class="add-inline">
+        <input type="text" id="newToolInput" class="input" placeholder="Add a tool to your list">
+        <button type="button" class="btn btn-ghost" id="addToolBtn">Add</button>
+      </div>
+
+      <label class="field-label">Materials required</label>
+      <div class="chip-grid" id="materialChips"></div>
+      <div class="add-inline">
+        <input type="text" id="newMaterialInput" class="input" placeholder="Add a material to your list">
+        <button type="button" class="btn btn-ghost" id="addMaterialBtn">Add</button>
+      </div>
+
+      <label class="field-label" for="entryPhotos">Photos</label>
+      <input type="file" id="entryPhotos" accept="image/*" multiple>
+      <div class="photo-preview" id="photoPreview"></div>
+    </div>
+
+    <div class="modal-foot">
+      <button class="btn btn-ghost" id="deleteEntryBtn" style="display:none">Delete entry</button>
+      <div class="modal-foot-right">
+        <button class="btn btn-ghost" id="cancelEntryBtn">Cancel</button>
+        <button class="btn btn-primary" id="saveEntryBtn">Save entry</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TRAINEE DETAILS MODAL -->
+<div class="modal-backdrop" id="settingsModalBackdrop">
+  <div class="modal modal-small" role="dialog" aria-modal="true">
+    <div class="modal-head">
+      <h3>Trainee details</h3>
+      <button class="icon-btn" id="closeSettingsModalBtn" aria-label="Close">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="rail-hint">Shown on the front of any logbook you generate.</p>
+      <label class="field-label" for="settingName">Name</label>
+      <input type="text" id="settingName" class="input">
+      <label class="field-label" for="settingQual">Qualification / programme</label>
+      <input type="text" id="settingQual" class="input" placeholder="e.g. Level 2 Diploma in Plumbing and Domestic Heating">
+      <label class="field-label" for="settingEmployer">Employer / training provider</label>
+      <input type="text" id="settingEmployer" class="input">
+    </div>
+    <div class="modal-foot">
+      <div class="modal-foot-right">
+        <button class="btn btn-primary" id="saveSettingsBtn">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- LOGBOOK PRINT VIEW -->
+<div id="logbookPrintView" class="logbook-print"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
