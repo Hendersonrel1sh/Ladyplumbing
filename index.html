@@ -24,6 +24,15 @@
       </div>
     </div>
 
+    <div class="drive-bar" id="driveBar">
+      <div class="drive-bar-status">
+        <span class="drive-dot" id="driveDot"></span>
+        <span id="driveStatusLabel">Not connected</span>
+      </div>
+      <button class="drive-bar-btn" id="connectDriveBtn" title="Sign in with your own Google account — your entries sync to your own Drive only">Connect Google Drive</button>
+      <button class="drive-bar-btn" id="disconnectDriveBtn" style="display:none">Disconnect</button>
+    </div>
+
     <button class="btn btn-primary btn-block" id="openNewEntryBtn">+ New log entry</button>
 
     <div class="rail-section">
@@ -59,14 +68,6 @@
       <h2>Logbook export</h2>
       <p class="rail-hint">Builds a printable logbook from the entries currently shown, for interviews or appraisals.</p>
       <button class="btn btn-outline btn-block" id="generateLogbookBtn">Generate logbook</button>
-    </div>
-
-    <div class="rail-section">
-      <h2>Google Drive sync</h2>
-      <p class="rail-hint">Sign in with your own Google account to keep entries and photos backed up automatically to your Drive. Each person signs in with their own account — your data stays in your own Drive.</p>
-      <p class="drive-status" id="driveStatusText"><span class="drive-dot" id="driveDot"></span><span id="driveStatusLabel">Not connected</span></p>
-      <button class="btn btn-outline btn-block" id="connectDriveBtn">Connect Google Drive</button>
-      <button class="btn btn-ghost btn-block" id="disconnectDriveBtn" style="display:none">Disconnect</button>
     </div>
 
     <div class="rail-section">

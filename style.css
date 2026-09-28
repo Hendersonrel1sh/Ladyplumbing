@@ -84,14 +84,26 @@ h1, h2, h3 { font-family: var(--font-head); margin: 0; font-weight: 600; }
 .stat-num { font-family: var(--font-mono); font-size: 20px; color: var(--copper); min-width: 34px; }
 .stat-label { font-size: 13px; color: #B7C2C8; }
 
-/* ---------- DRIVE SYNC STATUS ---------- */
-.drive-status {
+/* ---------- DRIVE SYNC BAR ---------- */
+.drive-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  margin-top: -4px;
+  background: #1E2A33;
+  border: 1px solid #324450;
+  border-radius: 3px;
+  flex-wrap: wrap;
+}
+.drive-bar-status {
   display: flex;
   align-items: center;
   gap: 7px;
-  font-size: 13px;
+  font-size: 12.5px;
   color: #B7C2C8;
-  margin: 0 0 10px;
+  flex: 1;
+  min-width: 0;
 }
 .drive-dot {
   width: 8px;
@@ -104,6 +116,20 @@ h1, h2, h3 { font-family: var(--font-head); margin: 0; font-weight: 600; }
 .drive-dot.connected { background: #6FCF97; }
 .drive-dot.connecting { background: var(--brass); }
 .drive-dot.error { background: var(--danger); }
+.drive-bar-btn {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 12px;
+  padding: 5px 10px;
+  border-radius: 2px;
+  border: 1px solid #E9A67B;
+  background: transparent;
+  color: #E9A67B;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.drive-bar-btn:hover { background: rgba(233,166,123,0.1); }
 
 /* ---------- FORM CONTROLS ---------- */
 .field-label {
