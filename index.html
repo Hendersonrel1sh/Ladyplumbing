@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
 
@@ -61,8 +62,16 @@
     </div>
 
     <div class="rail-section">
+      <h2>Google Drive sync</h2>
+      <p class="rail-hint">Sign in with your own Google account to keep entries and photos backed up automatically to your Drive. Each person signs in with their own account — your data stays in your own Drive.</p>
+      <p class="drive-status" id="driveStatusText"><span class="drive-dot" id="driveDot"></span><span id="driveStatusLabel">Not connected</span></p>
+      <button class="btn btn-outline btn-block" id="connectDriveBtn">Connect Google Drive</button>
+      <button class="btn btn-ghost btn-block" id="disconnectDriveBtn" style="display:none">Disconnect</button>
+    </div>
+
+    <div class="rail-section">
       <h2>Backup</h2>
-      <p class="rail-hint">Entries and photos live in this browser only. Export regularly and commit the file to your GitHub repo to keep them safe.</p>
+      <p class="rail-hint">Entries and photos live in this browser only unless Google Drive sync (above) is connected. Export regularly and commit the file to your GitHub repo to keep them safe.</p>
       <button class="btn btn-ghost btn-block" id="exportBackupBtn">Export backup (.json)</button>
       <label class="btn btn-ghost btn-block file-btn">
         Import backup

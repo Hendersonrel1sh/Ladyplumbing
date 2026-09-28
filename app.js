@@ -75,6 +75,7 @@ function saveEntries() {
     alert("Could not save — your browser's storage may be full. Try exporting a backup and removing some older photos.");
     console.error(e);
   }
+  schedulePushToDrive();
 }
 
 function loadSettings() {
@@ -88,6 +89,7 @@ function loadSettings() {
 
 function saveSettings() {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  schedulePushToDrive();
 }
 
 /* Libraries (tool/material quick-select lists) are arrays of
@@ -104,6 +106,7 @@ function loadLibrary(key, defaults, withFavourite) {
 
 function saveLibrary(key, lib) {
   localStorage.setItem(key, JSON.stringify(lib));
+  schedulePushToDrive();
 }
 
 /* ---------- Init ---------- */
@@ -116,6 +119,7 @@ document.addEventListener("DOMContentLoaded", () => {
   wireUp();
   applySettingsToForm();
   render();
+  initDriveSync();
 });
 
 function buildCategoryChips() {
@@ -286,6 +290,9 @@ function wireUp() {
   [document.getElementById("entryModalBackdrop"), document.getElementById("settingsModalBackdrop")].forEach(bd => {
     bd.addEventListener("click", (e) => { if (e.target === bd) bd.classList.remove("open"); });
   });
+
+  document.getElementById("connectDriveBtn").addEventListener("click", connectDrive);
+  document.getElementById("disconnectDriveBtn").addEventListener("click", disconnectDrive);
 }
 
 function applySettingsToForm() {
@@ -618,4 +625,254 @@ function mergeEntries(a, b) {
   const map = new Map();
   [...a, ...b].forEach(e => map.set(e.id, e));
   return Array.from(map.values());
+}
+
+/* ---------- Google Drive sync ----------
+   Each person signs in with their own Google account when they use the
+   app; the app then stores one JSON file in THAT account's Drive (created
+   by the app itself, via the narrow drive.file permission — it can't see
+   or touch anything else in that Drive). Signing in as a different person
+   syncs to a different Drive entirely; nothing is shared between accounts
+   automatically. */
+
+const GOOGLE_CLIENT_ID = "996748329875-lt62qdb1a9p1tgtt1hmepoheo2t2hl0m.apps.googleusercontent.com";
+const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
+const DRIVE_FILE_NAME = "lizzyplumbing-logbook-backup.json";
+const DRIVE_CONNECTED_KEY = "apprenticeLogbook.driveConnected";
+const DRIVE_FILE_ID_KEY = "apprenticeLogbook.driveFileId";
+
+let driveTokenClient = null;
+let driveAccessToken = null;
+let driveTokenExpiry = 0;
+let driveFileId = localStorage.getItem(DRIVE_FILE_ID_KEY) || null;
+let drivePushTimer = null;
+let driveSyncing = false;
+
+function initDriveSync() {
+  const tryInit = () => {
+    if (!window.google || !google.accounts || !google.accounts.oauth2) {
+      // Google Identity Services script hasn't finished loading yet — retry shortly.
+      setTimeout(tryInit, 300);
+      return;
+    }
+    driveTokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: GOOGLE_CLIENT_ID,
+      scope: DRIVE_SCOPE,
+      callback: onDriveTokenResponse
+    });
+
+    // If this browser previously connected, try a silent reconnect (no
+    // popup) so returning users don't have to sign in again every visit.
+    if (localStorage.getItem(DRIVE_CONNECTED_KEY) === "true") {
+      setDriveStatus("connecting", "Reconnecting…");
+      driveTokenClient.requestAccessToken({ prompt: "" });
+    }
+  };
+  tryInit();
+}
+
+function connectDrive() {
+  if (!driveTokenClient) {
+    alert("Google sign-in is still loading — please try again in a moment.");
+    return;
+  }
+  setDriveStatus("connecting", "Connecting…");
+  driveTokenClient.requestAccessToken({ prompt: "consent" });
+}
+
+function disconnectDrive() {
+  if (driveAccessToken && window.google && google.accounts && google.accounts.oauth2) {
+    google.accounts.oauth2.revoke(driveAccessToken, () => {});
+  }
+  driveAccessToken = null;
+  driveTokenExpiry = 0;
+  localStorage.removeItem(DRIVE_CONNECTED_KEY);
+  setDriveStatus("idle", "Not connected");
+  document.getElementById("connectDriveBtn").style.display = "block";
+  document.getElementById("disconnectDriveBtn").style.display = "none";
+}
+
+function onDriveTokenResponse(tokenResponse) {
+  if (!tokenResponse || tokenResponse.error) {
+    // A silent reconnect attempt failing just means the user needs to
+    // click "Connect" again — not an error worth alarming them with.
+    if (localStorage.getItem(DRIVE_CONNECTED_KEY) === "true") {
+      setDriveStatus("idle", "Not connected — click Connect to resume syncing");
+    } else {
+      setDriveStatus("idle", "Not connected");
+    }
+    return;
+  }
+  driveAccessToken = tokenResponse.access_token;
+  driveTokenExpiry = Date.now() + (tokenResponse.expires_in * 1000);
+  localStorage.setItem(DRIVE_CONNECTED_KEY, "true");
+  document.getElementById("connectDriveBtn").style.display = "none";
+  document.getElementById("disconnectDriveBtn").style.display = "block";
+  setDriveStatus("connecting", "Syncing…");
+  syncWithDriveOnConnect();
+}
+
+function setDriveStatus(state, label) {
+  const dot = document.getElementById("driveDot");
+  const text = document.getElementById("driveStatusLabel");
+  if (!dot || !text) return;
+  dot.className = "drive-dot" + (state === "connected" ? " connected" : state === "connecting" ? " connecting" : state === "error" ? " error" : "");
+  text.textContent = label;
+}
+
+function driveHeaders(extra) {
+  return Object.assign({ Authorization: `Bearer ${driveAccessToken}` }, extra || {});
+}
+
+function buildDrivePayload() {
+  return { entries, settings, toolLibrary, materialLibrary, syncedAt: new Date().toISOString() };
+}
+
+function findDriveFile() {
+  const q = encodeURIComponent(`name='${DRIVE_FILE_NAME}' and trashed=false`);
+  return fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)&spaces=drive`, {
+    headers: driveHeaders()
+  })
+    .then(r => r.json())
+    .then(data => (data.files && data.files.length ? data.files[0].id : null));
+}
+
+function createDriveFile(payload) {
+  const boundary = "logbook-boundary";
+  const metadata = { name: DRIVE_FILE_NAME, mimeType: "application/json" };
+  const body =
+    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n` +
+    `--${boundary}\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(payload)}\r\n` +
+    `--${boundary}--`;
+  return fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart", {
+    method: "POST",
+    headers: driveHeaders({ "Content-Type": `multipart/related; boundary=${boundary}` }),
+    body
+  })
+    .then(r => r.json())
+    .then(data => data.id);
+}
+
+function downloadDriveFile(fileId) {
+  return fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+    headers: driveHeaders()
+  }).then(r => (r.ok ? r.json() : null));
+}
+
+function uploadDriveFile(fileId, payload) {
+  return fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
+    method: "PATCH",
+    headers: driveHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify(payload)
+  });
+}
+
+function mergeToolLibraries(local, remote) {
+  const byName = new Map();
+  [...local, ...remote].forEach(t => {
+    const existing = byName.get(t.name.toLowerCase());
+    byName.set(t.name.toLowerCase(), {
+      name: t.name,
+      favourite: (existing && existing.favourite) || t.favourite
+    });
+  });
+  return Array.from(byName.values());
+}
+
+function mergeMaterialLibraries(local, remote) {
+  const seen = new Set();
+  const merged = [];
+  [...local, ...remote].forEach(m => {
+    const key = m.toLowerCase();
+    if (!seen.has(key)) { seen.add(key); merged.push(m); }
+  });
+  return merged;
+}
+
+function syncWithDriveOnConnect() {
+  driveSyncing = true;
+  findDriveFile()
+    .then(fileId => {
+      if (fileId) {
+        driveFileId = fileId;
+        localStorage.setItem(DRIVE_FILE_ID_KEY, fileId);
+        return downloadDriveFile(fileId);
+      }
+      // No file yet in this Drive — create one from what's on this device.
+      return createDriveFile(buildDrivePayload()).then(newId => {
+        driveFileId = newId;
+        localStorage.setItem(DRIVE_FILE_ID_KEY, newId);
+        return null; // nothing remote to merge in
+      });
+    })
+    .then(remote => {
+      if (remote) {
+        if (Array.isArray(remote.entries)) entries = mergeEntries(entries, remote.entries);
+        if (Array.isArray(remote.toolLibrary)) toolLibrary = mergeToolLibraries(toolLibrary, remote.toolLibrary);
+        if (Array.isArray(remote.materialLibrary)) materialLibrary = mergeMaterialLibraries(materialLibrary, remote.materialLibrary);
+        // Only adopt remote trainee details if none are set locally yet.
+        if (remote.settings && !settings.name && !settings.qualification && !settings.employer) {
+          settings = remote.settings;
+        }
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+        localStorage.setItem(TOOLS_KEY, JSON.stringify(toolLibrary));
+        localStorage.setItem(MATERIALS_KEY, JSON.stringify(materialLibrary));
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+        applySettingsToForm();
+        renderToolChips();
+        renderMaterialChips();
+        render();
+      }
+      // Push the merged result back up so Drive has the combined picture too.
+      return uploadDriveFile(driveFileId, buildDrivePayload());
+    })
+    .then(() => {
+      driveSyncing = false;
+      setDriveStatus("connected", "Connected — synced just now");
+    })
+    .catch(err => {
+      driveSyncing = false;
+      console.error("Drive sync failed", err);
+      setDriveStatus("error", "Sync error — try reconnecting");
+    });
+}
+
+function schedulePushToDrive() {
+  if (localStorage.getItem(DRIVE_CONNECTED_KEY) !== "true") return;
+  clearTimeout(drivePushTimer);
+  drivePushTimer = setTimeout(pushToDrive, 800);
+}
+
+function pushToDrive() {
+  if (driveSyncing) return; // avoid racing the initial connect sync
+  withFreshDriveToken(() => {
+    if (!driveFileId) return;
+    setDriveStatus("connecting", "Syncing…");
+    uploadDriveFile(driveFileId, buildDrivePayload())
+      .then(() => setDriveStatus("connected", "Connected — synced just now"))
+      .catch(err => {
+        console.error("Drive push failed", err);
+        setDriveStatus("error", "Sync error — will retry on next change");
+      });
+  });
+}
+
+function withFreshDriveToken(onReady) {
+  if (driveAccessToken && Date.now() < driveTokenExpiry - 60000) {
+    onReady();
+    return;
+  }
+  if (!driveTokenClient) return;
+  driveTokenClient.requestAccessToken({
+    prompt: "",
+    callback: (resp) => {
+      if (!resp || resp.error) {
+        setDriveStatus("idle", "Not connected — click Connect to resume syncing");
+        return;
+      }
+      driveAccessToken = resp.access_token;
+      driveTokenExpiry = Date.now() + (resp.expires_in * 1000);
+      onReady();
+    }
+  });
 }

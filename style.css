@@ -84,6 +84,27 @@ h1, h2, h3 { font-family: var(--font-head); margin: 0; font-weight: 600; }
 .stat-num { font-family: var(--font-mono); font-size: 20px; color: var(--copper); min-width: 34px; }
 .stat-label { font-size: 13px; color: #B7C2C8; }
 
+/* ---------- DRIVE SYNC STATUS ---------- */
+.drive-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: #B7C2C8;
+  margin: 0 0 10px;
+}
+.drive-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #5A6C77;
+  flex-shrink: 0;
+  display: inline-block;
+}
+.drive-dot.connected { background: #6FCF97; }
+.drive-dot.connecting { background: var(--brass); }
+.drive-dot.error { background: var(--danger); }
+
 /* ---------- FORM CONTROLS ---------- */
 .field-label {
   display: block;
